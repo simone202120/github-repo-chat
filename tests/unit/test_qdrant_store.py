@@ -5,6 +5,7 @@ from llama_index.core.embeddings import MockEmbedding
 from qdrant_client import QdrantClient
 
 from github_repo_chat.core.archive import RepoArchive
+from github_repo_chat.core.errors import RepoNotIndexedError
 from github_repo_chat.core.ingestion import RepoManifest, ingest_repo
 from github_repo_chat.core.repo_ref import RepoRef
 from github_repo_chat.core.splitting import Splitter
@@ -92,3 +93,8 @@ def test_is_unhealthy_when_qdrant_unreachable() -> None:
     sparse = SparseEncoders(hashed_bag_of_words, hashed_bag_of_words)
     client = QdrantClient(url="http://127.0.0.1:1", timeout=1, check_compatibility=False)
     assert not QdrantStore(client, MockEmbedding(embed_dim=8), sparse).is_healthy()
+
+
+def test_retriever_without_collection_raises_not_indexed(store: QdrantStore) -> None:
+    with pytest.raises(RepoNotIndexedError):
+        store.retriever(REPO, top_k=3)
