@@ -56,3 +56,29 @@ Private repos, authentication, multi-user, reranking models requiring GPUs.
 ## Deliverables
 Docker compose (api, ui, qdrant), README with architecture diagram and demo GIF placeholder,
 `docs/architecture.md`, `docs/code-map.md`, CI green, coverage >= 80%.
+
+## UI and demo polish
+
+The UI is what the interviewer sees first: it must look clean and deliberate, not like a default
+Streamlit script.
+
+- Custom theme in `.streamlit/config.toml` (`[theme]`: base, primaryColor, backgroundColor,
+  secondaryBackgroundColor, textColor, font, baseRadius) using the palette below. No heavy CSS hacks;
+  at most a few lines of `st.markdown(..., unsafe_allow_html=True)` for spacing.
+- `st.set_page_config` with title, icon and `layout="wide"`; a short header with the project name and
+  a one-line description; a sidebar for settings and state.
+- Long operations show progress (`st.status` / `st.progress` / `st.spinner`) with human-readable steps.
+- Every screen has a useful empty state: 3 clickable example inputs that run a real demo.
+- Results are presented, not dumped: containers with borders, badges, metrics, expanders. Raw JSON
+  only in a collapsed "Raw response" expander.
+- Show cost and speed of each run (tokens, estimated cost, latency) as small metrics: it proves the
+  observability story. Link to the Langfuse trace when tracing is enabled.
+- Errors are friendly `st.error` messages that say what to do, never stack traces.
+- The UI talks to the FastAPI backend over HTTP (backend URL from settings), never imports `core/`.
+- Keep it one file per page under `ui/`, small helpers in one module; no duplicated rendering code.
+
+Palette: dark base, background `#0D1117`, surface `#161B22`, text `#E6EDF3`, primary `#2F81F7`.
+Layout: sidebar with "Add repository" (URL input + progress while indexing: downloading, filtering,
+splitting, embedding) and the list of indexed repos with file/chunk counts. Main area: `st.chat_message`
+chat; under each answer, source cards (file path, symbol/section, score, "Open on GitHub" link).
+Examples in the empty state: `fastapi/fastapi`, `pallets/flask`, `langchain-ai/langgraph`.
