@@ -11,6 +11,7 @@ from github_repo_chat.api.jobs import JobRegistry
 from github_repo_chat.config import Settings
 from github_repo_chat.core.archive import RepoArchive, download_archive
 from github_repo_chat.core.chat import ChatEngine
+from github_repo_chat.core.errors import RepoChatError
 from github_repo_chat.core.ingestion import ingest_repo
 from github_repo_chat.core.repo_ref import RepoRef
 from github_repo_chat.core.splitting import Splitter
@@ -26,6 +27,7 @@ from github_repo_chat.llm.factory import (
 logger = logging.getLogger(__name__)
 
 ArchiveFetcher = Callable[[RepoRef], bytes]
+_UNEXPECTED_FAILURE = "Indexing failed unexpectedly; the server logs have the details"
 
 
 @dataclass
@@ -61,7 +63,9 @@ class Services:
             )
         except Exception as exc:
             logger.exception("Ingestion of %s failed", repo.slug)
-            self.jobs.update(repo.id, status="failed", error=str(exc) or type(exc).__name__)
+            # Domain errors are written for users; anything else may leak internals.
+            message = str(exc) if isinstance(exc, RepoChatError) else _UNEXPECTED_FAILURE
+            self.jobs.update(repo.id, status="failed", error=message)
             return
         logger.info("Indexed %s: %s", repo.slug, report)
         self.jobs.update(repo.id, status="ready", stage="done")

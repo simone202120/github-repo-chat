@@ -276,3 +276,16 @@ def test_job_update_after_discard_is_ignored(services: Services) -> None:
     services.jobs.discard("octo--gone")
     services.jobs.update("octo--gone", status="failed")
     assert services.jobs.get("octo--gone") is None
+
+
+def test_unexpected_ingestion_error_is_not_leaked(
+    client: TestClient, services: Services, monkeypatch
+) -> None:
+    def boom(repo: RepoRef) -> bytes:
+        raise RuntimeError("connection to 10.0.0.7:6333 refused")
+
+    monkeypatch.setattr(services, "fetch_archive", boom)
+    _index(client, "octo/broken")
+    error = client.get("/repos/octo--broken").json()["error"]
+    assert "10.0.0.7" not in error
+    assert "server logs" in error

@@ -61,3 +61,9 @@ def test_repo_archive_strips_root_folder_and_skips_dirs() -> None:
 def test_repo_archive_rejects_invalid_zip() -> None:
     with pytest.raises(ArchiveError):
         RepoArchive(b"not a zip")
+
+
+def test_repo_archive_rejects_too_many_entries(monkeypatch) -> None:
+    monkeypatch.setattr("github_repo_chat.core.archive.MAX_ENTRIES", 2)
+    with pytest.raises(ArchiveError, match="more than 2 entries"):
+        RepoArchive(make_zip({"a.py": "", "b.py": ""}))
