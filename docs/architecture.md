@@ -68,7 +68,9 @@ Each decision lists the choice and the trade-off behind it.
 
 - **Repository id = job id.** `POST /repos` returns the repository id (`<owner>--<name>`), which
   is also the path parameter of `GET/DELETE /repos/{id}`. One id per repository keeps the API
-  small, and at most one ingestion job per repository can be active (a second one gets `409`).
+  small. At most one job per repository can be active (a second one gets `409`); `DELETE`
+  also claims the repository with a `deleting` job, so a re-index cannot start while its
+  collection is being dropped and then silently vanish.
 - **In-memory job registry + FastAPI background tasks.** Ingestion runs in the server threadpool,
   and its progress (stage, done/total) and errors live in a thread-safe dict. Trade-off: job
   status is lost on restart and jobs do not scale across workers, which is fine for a

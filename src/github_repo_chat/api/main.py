@@ -1,7 +1,7 @@
 """FastAPI entry point: builds the services at startup and maps domain errors to HTTP codes."""
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -13,6 +13,8 @@ from github_repo_chat.api.services import Services, build_services
 from github_repo_chat.config import get_settings
 from github_repo_chat.core.errors import InvalidRepoError, RepoChatError, RepoNotIndexedError
 
+# Starlette picks the handler of the closest class in the exception's MRO, so the
+# `RepoChatError` fallback only applies to domain errors without a more specific entry.
 _STATUS_BY_ERROR: dict[type[Exception], int] = {
     InvalidRepoError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     RepoNotIndexedError: status.HTTP_404_NOT_FOUND,
@@ -21,9 +23,11 @@ _STATUS_BY_ERROR: dict[type[Exception], int] = {
 }
 
 
-async def _domain_error(_request: Request, exc: Exception) -> JSONResponse:
-    code = next(c for error, c in _STATUS_BY_ERROR.items() if isinstance(exc, error))
-    return JSONResponse(status_code=code, content={"detail": str(exc)})
+def _error_handler(code: int) -> Callable[[Request, Exception], Awaitable[JSONResponse]]:
+    async def handle(_request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=code, content={"detail": str(exc)})
+
+    return handle
 
 
 def create_app(services: Services | None = None) -> FastAPI:
@@ -37,8 +41,8 @@ def create_app(services: Services | None = None) -> FastAPI:
         app.state.services.tracer.shutdown()
 
     app = FastAPI(title="github-repo-chat", version="0.1.0", lifespan=lifespan)
-    for error in _STATUS_BY_ERROR:
-        app.add_exception_handler(error, _domain_error)
+    for error, code in _STATUS_BY_ERROR.items():
+        app.add_exception_handler(error, _error_handler(code))
     for module in (health, repos, chat):
         app.include_router(module.router)
     return app

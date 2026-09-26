@@ -15,10 +15,12 @@ ServicesDep = Annotated[Services, Depends(get_services)]
 
 
 def _info(repo: RepoRef, manifest: RepoManifest | None, job: Job | None) -> RepoInfo:
+    """A live job knows the branch being indexed; otherwise the manifest knows the indexed one."""
+    source = job.repo if job else manifest.repo if manifest else repo
     info = RepoInfo(
         id=repo.id,
         repo=repo.slug,
-        branch=(job.repo if job else repo).branch,
+        branch=source.branch,
         status=job.status if job else "ready",
     )
     if manifest is not None:
@@ -37,7 +39,7 @@ def _find(services: Services, repo_id: str) -> RepoInfo:
     job = services.jobs.get(repo.id)
     if manifest is None and job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Repository {repo.slug} is not indexed")
-    return _info(manifest.repo if manifest else repo, manifest, job)
+    return _info(repo, manifest, job)
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -52,12 +54,9 @@ def add_repo(body: AddRepoRequest, background: BackgroundTasks, services: Servic
 def list_repos(services: ServicesDep) -> list[RepoInfo]:
     manifests = {m.repo.id: m for m in services.store.list_manifests()}
     jobs = {job.repo.id: job for job in services.jobs.all()}
-    repos = {m.repo.id: m.repo for m in manifests.values()} | {
-        repo_id: job.repo for repo_id, job in jobs.items() if repo_id not in manifests
-    }
     return [
-        _info(repos[repo_id], manifests.get(repo_id), jobs.get(repo_id))
-        for repo_id in sorted(repos)
+        _info(parse_repo_id(repo_id), manifests.get(repo_id), jobs.get(repo_id))
+        for repo_id in sorted(manifests.keys() | jobs.keys())
     ]
 
 
@@ -68,10 +67,11 @@ def get_repo(repo_id: str, services: ServicesDep) -> RepoInfo:
 
 @router.delete("/{repo_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_repo(repo_id: str, services: ServicesDep) -> Response:
-    info = _find(services, repo_id)
-    if info.status in ("queued", "indexing"):
-        raise HTTPException(status.HTTP_409_CONFLICT, f"{info.repo} is being indexed")
+    _find(services, repo_id)
     repo = parse_repo_id(repo_id)
-    services.store.delete_repo(repo)
-    services.jobs.discard(repo.id)
+    services.jobs.begin_delete(repo)
+    try:
+        services.store.delete_repo(repo)
+    finally:
+        services.jobs.discard(repo.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

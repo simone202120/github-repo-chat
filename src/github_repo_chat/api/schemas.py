@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-JobStatus = Literal["queued", "indexing", "ready", "failed"]
+JobStatus = Literal["queued", "indexing", "ready", "failed", "deleting"]
 
 
 class AddRepoRequest(BaseModel):

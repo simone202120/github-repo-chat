@@ -1,4 +1,4 @@
-"""Thread-safe in-memory registry of ingestion jobs, one active job per repository."""
+"""Thread-safe in-memory registry of ingestion and deletion jobs, one active per repository."""
 
 import threading
 from dataclasses import dataclass, replace
@@ -9,7 +9,7 @@ from github_repo_chat.core.repo_ref import RepoRef
 
 
 class JobConflictError(Exception):
-    """An ingestion job for this repository is already queued or running."""
+    """The repository is already being indexed or deleted."""
 
 
 @dataclass(frozen=True)
@@ -23,7 +23,7 @@ class Job:
 
     @property
     def active(self) -> bool:
-        return self.status in ("queued", "indexing")
+        return self.status in ("queued", "indexing", "deleting")
 
 
 class JobRegistry:
@@ -32,16 +32,25 @@ class JobRegistry:
         self._lock = threading.Lock()
 
     def start(self, repo: RepoRef) -> Job:
+        return self._claim(repo, Job(repo))
+
+    def begin_delete(self, repo: RepoRef) -> None:
+        """Reserves the repository so no ingestion can start while its data is being dropped."""
+        self._claim(repo, Job(repo, status="deleting"))
+
+    def _claim(self, repo: RepoRef, job: Job) -> Job:
         with self._lock:
             current = self._jobs.get(repo.id)
             if current is not None and current.active:
-                raise JobConflictError(f"{repo.slug} is already being indexed")
-            job = self._jobs[repo.id] = Job(repo)
+                raise JobConflictError(f"{repo.slug} is busy ({current.status}), try again later")
+            self._jobs[repo.id] = job
             return job
 
     def update(self, repo_id: str, **changes: Any) -> None:
+        """No-op when the job is gone, so a background task never fails on bookkeeping."""
         with self._lock:
-            self._jobs[repo_id] = replace(self._jobs[repo_id], **changes)
+            if repo_id in self._jobs:
+                self._jobs[repo_id] = replace(self._jobs[repo_id], **changes)
 
     def get(self, repo_id: str) -> Job | None:
         with self._lock:

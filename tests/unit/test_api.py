@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -213,3 +214,65 @@ def test_chat_repository_without_content_returns_404(
 )
 def test_chat_validates_input(client: TestClient, body: dict) -> None:
     assert client.post("/chat", json=body).status_code == 422
+
+
+def test_reindex_is_rejected_while_delete_is_in_flight(
+    client: TestClient, services: Services, monkeypatch
+) -> None:
+    _index(client)
+    started, release = threading.Event(), threading.Event()
+    real_delete = services.store.delete_repo
+
+    def slow_delete(repo: RepoRef) -> None:
+        started.set()
+        assert release.wait(timeout=5)
+        real_delete(repo)
+
+    monkeypatch.setattr(services.store, "delete_repo", slow_delete)
+    result: dict[str, int] = {}
+    thread = threading.Thread(
+        target=lambda: result.update(code=client.delete("/repos/octo--tinycalc").status_code)
+    )
+    thread.start()
+    assert started.wait(timeout=5)
+
+    assert client.get("/repos/octo--tinycalc").json()["status"] == "deleting"
+    assert client.post("/repos", json={"url": "octo/tinycalc"}).status_code == 409
+
+    release.set()
+    thread.join(timeout=5)
+    assert result["code"] == 204
+    assert client.get("/repos/octo--tinycalc").status_code == 404
+    assert client.post("/repos", json={"url": "octo/tinycalc"}).status_code == 202
+
+
+def test_delete_failure_releases_the_repository(
+    client: TestClient, services: Services, monkeypatch
+) -> None:
+    _index(client)
+
+    def broken(repo: RepoRef) -> None:
+        raise RuntimeError("qdrant down")
+
+    monkeypatch.setattr(services.store, "delete_repo", broken)
+    with pytest.raises(RuntimeError):
+        client.delete("/repos/octo--tinycalc")
+    assert services.jobs.get("octo--tinycalc") is None
+
+
+def test_list_repos_reports_indexed_branch_after_job_is_forgotten(
+    client: TestClient, services: Services
+) -> None:
+    client.post("/repos", json={"url": "octo/tinycalc", "branch": "dev"})
+    services.jobs.discard("octo--tinycalc")
+    assert [(r["repo"], r["branch"]) for r in client.get("/repos").json()] == [
+        ("octo/tinycalc", "dev")
+    ]
+    assert client.get("/repos/octo--tinycalc").json()["branch"] == "dev"
+
+
+def test_job_update_after_discard_is_ignored(services: Services) -> None:
+    services.jobs.start(RepoRef("octo", "gone"))
+    services.jobs.discard("octo--gone")
+    services.jobs.update("octo--gone", status="failed")
+    assert services.jobs.get("octo--gone") is None
