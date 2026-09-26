@@ -26,6 +26,7 @@ def test_index_chat_and_delete_through_the_api() -> None:
         build_embed_model(settings),
         build_sparse_encoders(settings),
     )
+    store.ensure_registry()
     llm = ScriptedLLM(responses=["It raises DivisionByZeroError [1]."])
     services = Services(
         settings,
