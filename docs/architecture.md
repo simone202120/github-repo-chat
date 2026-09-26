@@ -1,5 +1,65 @@
 # Architecture
 
+## Components
+
+- **UI (`ui/`)** — Streamlit app. Talks to the API over HTTP only, never imports `core/`.
+- **API (`api/`)** — FastAPI app: routers for repos, chat and health, an in-memory job registry
+  for ingestion progress, and a `Services` container built once at startup.
+- **Core (`core/`)** — domain logic with no framework dependency: archive download and filtering,
+  splitting, diffing/incremental re-index, the chat engine (condense, retrieve, rerank, answer,
+  citations).
+- **Infra (`infra/`)** — adapters to the outside world: `qdrant_store.py` (hybrid vector store and
+  manifest registry) and `tracing.py` (Langfuse/OpenInference).
+- **LLM (`llm/`)** — `factory.py` builds the OpenRouter LLM, the FastEmbed embedding/sparse/rerank
+  models in one place; `prompts.py` holds every prompt template.
+- **Qdrant** — one hybrid collection per repository plus a registry collection for manifests; the
+  only stateful service.
+
+## Data flow
+
+### Ingestion (`POST /repos`)
+
+```mermaid
+flowchart LR
+    A[POST /repos] --> B[Download zip from codeload]
+    B --> C[Filter candidate files]
+    C --> D[Diff against stored manifest by content hash]
+    D --> E[Delete removed/changed files' chunks]
+    E --> F[Split changed/added files: Markdown / CodeSplitter / SentenceSplitter]
+    F --> G[Embed dense + sparse and upsert into Qdrant]
+    G --> H[Save updated manifest]
+```
+
+### Chat request (`POST /chat`)
+
+```mermaid
+sequenceDiagram
+    participant UI as Streamlit UI
+    participant API as FastAPI /chat
+    participant Engine as ChatEngine
+    participant Qdrant
+    participant LLM as OpenRouter LLM
+    participant Langfuse
+
+    UI->>API: POST /chat {repo, question, history}
+    API->>Langfuse: open root trace
+    API->>Engine: answer(repo, question, history)
+    alt has history
+        Engine->>LLM: condense question
+        LLM-->>Engine: standalone question
+    end
+    Engine->>Qdrant: hybrid retrieve (dense + BM25)
+    Qdrant-->>Engine: top candidate chunks
+    opt reranker configured
+        Engine->>Engine: rerank and keep top-k
+    end
+    Engine->>LLM: answer with context prompt
+    LLM-->>Engine: answer text + usage
+    Engine-->>API: answer, sources, usage
+    API->>Langfuse: set trace output
+    API-->>UI: answer + sources + usage + trace_url
+```
+
 ## Design decisions
 
 Each decision lists the choice and the trade-off behind it.
