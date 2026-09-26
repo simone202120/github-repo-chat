@@ -160,3 +160,21 @@ Each decision lists the choice and the trade-off behind it.
   the UI (`streamlit run`), as a non-root user. FastEmbed models are cached in a named volume, so
   they download only on the first start. CI builds and smoke-tests the image on every PR and pushes
   it to GHCR from `main`.
+
+### Security
+
+Findings of the one-off `security-auditor` pass and how they are handled:
+
+- **No SSRF surface.** Only `github.com` references are accepted; the download URL is always
+  built as `https://codeload.github.com/<owner>/<name>/zip/<ref>` from validated parts.
+- **Archive limits.** Streamed download capped at `MAX_ARCHIVE_BYTES`, at most 100 000 zip
+  entries, per-file size checked on zip metadata before decompression, at most `MAX_FILES` files.
+- **Prompt injection.** Repository text is delimited and declared untrusted, delimiter-closing
+  tags are neutralized, and the LLM has no tools: a successful injection can only produce a
+  misleading answer, which the citations let the reader verify.
+- **Error hygiene.** Ingestion failures show domain messages (e.g. "repository not found");
+  unexpected errors show a generic message and are logged with full detail.
+- **Dependencies.** `pip-audit` runs in CI.
+- **Accepted risk: no authentication or rate limiting.** Out of scope per the design (single-user
+  demo). Anyone who can reach the API can trigger ingestion and spend LLM credits, so do not expose
+  ports 8000/8501 publicly without an authenticating reverse proxy.

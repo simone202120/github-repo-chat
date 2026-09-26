@@ -20,6 +20,7 @@ jobs:
       - run: uv run mypy src
       - run: uv run vulture src
       - run: uv run deptry .
+      - run: uvx pip-audit --path .venv
 
   test:
     runs-on: ubuntu-latest

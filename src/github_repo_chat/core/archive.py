@@ -12,6 +12,9 @@ from github_repo_chat.core.repo_ref import RepoRef
 
 logger = logging.getLogger(__name__)
 
+# Bounds the work done on zip metadata before any filtering (real repositories stay far below).
+MAX_ENTRIES = 100_000
+
 
 @dataclass(frozen=True)
 class ArchiveEntry:
@@ -54,6 +57,8 @@ class RepoArchive:
             self._zip = zipfile.ZipFile(io.BytesIO(data))
         except zipfile.BadZipFile as exc:
             raise ArchiveError("Downloaded archive is not a valid zip file") from exc
+        if len(self._zip.infolist()) > MAX_ENTRIES:
+            raise ArchiveError(f"Archive has more than {MAX_ENTRIES} entries")
         self._members = {
             path: info
             for info in self._zip.infolist()
