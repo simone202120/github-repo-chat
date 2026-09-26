@@ -84,3 +84,19 @@ Each decision lists the choice and the trade-off behind it.
 - **Dependency container.** `Services` bundles settings, store, chat engine, tracer, jobs and the
   archive fetcher. `create_app(services)` lets tests inject in-memory Qdrant, a mock embedding, a
   scripted LLM and a fixture zip, with no network or keys.
+
+### UI and packaging
+
+- **UI over HTTP only.** The Streamlit page talks to the API through `ui/client.py` and never
+  imports `core/`, so the UI can be replaced (or run on another host) without touching the backend.
+  Rendering helpers live in `ui/components.py`; `ui/app.py` is the only page.
+- **Demo-first empty states.** With no repository indexed the page offers `fastapi/fastapi`,
+  `pallets/flask` and `langchain-ai/langgraph` as one-click demos; an empty chat offers three
+  example questions. Every answer shows source cards, token / cost / latency metrics and, when
+  tracing is on, a link to its Langfuse trace.
+- **Polling for progress.** The UI polls `GET /repos/{id}` once a second while indexing.
+  Trade-off: simpler than server-sent events or websockets, and good enough for one user.
+- **One image, two commands.** The same Docker image runs the API (default `uvicorn` command) and
+  the UI (`streamlit run`), as a non-root user. FastEmbed models are cached in a named volume, so
+  they download only on the first start. CI builds and smoke-tests the image on every PR and pushes
+  it to GHCR from `main`.
