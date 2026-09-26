@@ -85,6 +85,7 @@ def ingest_repo(
     progress: ProgressCallback | None = None,
 ) -> IngestionReport:
     report = progress or (lambda _stage, _done, _total: None)
+    report("filtering", 0, 0)
     files = {
         f.path: f for f in select_files(archive, max_files=max_files, max_file_bytes=max_file_bytes)
     }

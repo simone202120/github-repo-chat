@@ -26,6 +26,8 @@ def build_llm(settings: Settings) -> LLM:
         temperature=settings.llm_temperature,
         max_tokens=_MAX_ANSWER_TOKENS,
         context_window=_CONTEXT_WINDOW,
+        # Asks OpenRouter to include the request cost in `usage`, shown in the UI and traces.
+        additional_kwargs={"extra_body": {"usage": {"include": True}}},
     )
 
 

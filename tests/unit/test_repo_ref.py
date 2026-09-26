@@ -1,7 +1,7 @@
 import pytest
 
 from github_repo_chat.core.errors import InvalidRepoError
-from github_repo_chat.core.repo_ref import RepoRef, parse_repo, parse_repo_id
+from github_repo_chat.core.repo_ref import RepoRef, parse_repo, parse_repo_id, parse_repo_or_id
 
 
 @pytest.mark.parametrize(
@@ -82,3 +82,8 @@ def test_repo_id_round_trips() -> None:
 def test_parse_repo_id_rejects_missing_separator() -> None:
     with pytest.raises(InvalidRepoError):
         parse_repo_id("nope")
+
+
+@pytest.mark.parametrize("value", ["octo/demo", "octo--demo", "https://github.com/octo/demo"])
+def test_parse_repo_or_id_accepts_slug_url_and_id(value: str) -> None:
+    assert parse_repo_or_id(value) == RepoRef("octo", "demo")

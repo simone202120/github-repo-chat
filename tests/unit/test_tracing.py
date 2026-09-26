@@ -28,11 +28,15 @@ class _FakeLangfuse:
     def shutdown(self) -> None:
         self.closed = True
 
+    def get_trace_url(self) -> str:
+        return "https://langfuse.test/trace/1"
+
 
 def test_disabled_tracer_is_noop() -> None:
     tracer = setup_tracing(Settings(_env_file=None, langfuse_public_key=""))
-    with tracer.trace("chat", {"q": 1}, {}) as set_output:
-        set_output("ignored")
+    with tracer.trace("chat", {"q": 1}, {}) as handle:
+        handle.set_output("ignored")
+        assert handle.url is None
     tracer.shutdown()
 
 
@@ -47,8 +51,9 @@ def test_enabled_tracer_records_root_span(monkeypatch) -> None:
     )
 
     tracer = setup_tracing(settings)
-    with tracer.trace("chat", {"question": "q"}, {"repo": "a/b"}) as set_output:
-        set_output({"answer": "x"})
+    with tracer.trace("chat", {"question": "q"}, {"repo": "a/b"}) as handle:
+        handle.set_output({"answer": "x"})
+        assert handle.url == "https://langfuse.test/trace/1"
     tracer.shutdown()
 
     client = tracer._client
@@ -62,5 +67,5 @@ def test_enabled_tracer_records_root_span(monkeypatch) -> None:
 
 
 def test_tracer_without_client_yields_callable() -> None:
-    with Tracer(None).trace("x", None, {}) as set_output:
-        assert set_output(1) is None
+    with Tracer(None).trace("x", None, {}) as handle:
+        assert handle.set_output(1) is None

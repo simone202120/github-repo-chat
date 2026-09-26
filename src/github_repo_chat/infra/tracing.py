@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any
 
 from langfuse import Langfuse
@@ -12,7 +13,14 @@ from github_repo_chat.config import Settings
 
 logger = logging.getLogger(__name__)
 
-OutputSetter = Callable[[Any], None]
+
+@dataclass(frozen=True)
+class TraceHandle:
+    set_output: Callable[[Any], None]
+    url: str | None = None
+
+
+_NO_TRACE = TraceHandle(set_output=lambda _output: None)
 
 
 class Tracer:
@@ -22,10 +30,10 @@ class Tracer:
         self._client = client
 
     @contextmanager
-    def trace(self, name: str, input_data: Any, metadata: dict[str, Any]) -> Iterator[OutputSetter]:
+    def trace(self, name: str, input_data: Any, metadata: dict[str, Any]) -> Iterator[TraceHandle]:
         """Opens a root span; LlamaIndex spans created inside it become its children."""
         if self._client is None:
-            yield lambda _output: None
+            yield _NO_TRACE
             return
         with self._client.start_as_current_observation(
             name=name, as_type="chain", input=input_data, metadata=metadata
@@ -34,7 +42,7 @@ class Tracer:
             def set_output(output: Any) -> None:
                 span.update(output=output)
 
-            yield set_output
+            yield TraceHandle(set_output, self._client.get_trace_url())
 
     def shutdown(self) -> None:
         if self._client is not None:
