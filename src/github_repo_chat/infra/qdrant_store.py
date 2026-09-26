@@ -13,6 +13,7 @@ from llama_index.core.schema import BaseNode
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, models
 
+from github_repo_chat.core.errors import RepoNotIndexedError
 from github_repo_chat.core.ingestion import RepoManifest
 from github_repo_chat.core.repo_ref import RepoRef, parse_repo
 from github_repo_chat.llm.factory import SparseEncoders
@@ -61,6 +62,8 @@ class QdrantStore:
         return QdrantRepoIndex(self, self._client, repo, self._vector_index(repo))
 
     def retriever(self, repo: RepoRef, top_k: int) -> BaseRetriever:
+        if not self._client.collection_exists(collection_name(repo)):
+            raise RepoNotIndexedError(f"Repository {repo.slug} has no indexed content yet")
         return self._vector_index(repo).as_retriever(
             similarity_top_k=top_k,
             sparse_top_k=top_k * _SPARSE_POOL_FACTOR,
