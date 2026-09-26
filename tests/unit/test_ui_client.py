@@ -63,3 +63,10 @@ def test_unreachable_api() -> None:
 
     with pytest.raises(ApiError, match="unreachable"):
         _client(handler).repos()
+
+
+def test_non_dict_json_error_body_is_still_a_friendly_api_error() -> None:
+    """A backend/proxy that returns a bare JSON string or list as an error body
+    must still surface as ApiError, not crash `_detail` with AttributeError."""
+    with pytest.raises(ApiError):
+        _client(lambda r: httpx.Response(500, json="Internal error")).repos()

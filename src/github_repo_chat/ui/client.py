@@ -52,7 +52,8 @@ class ApiClient:
 
 def _detail(response: httpx.Response) -> str:
     try:
-        detail = response.json().get("detail", response.text)
+        body = response.json()
+        detail = body.get("detail", response.text) if isinstance(body, dict) else body
     except ValueError:
         detail = response.text
     if isinstance(detail, list):

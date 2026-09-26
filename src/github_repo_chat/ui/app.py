@@ -16,6 +16,7 @@ EXAMPLE_QUESTIONS = [
     "Where is the main entry point implemented?",
 ]
 _POLL_INTERVAL_S = 1.0
+_MAX_WAIT_S = 30 * 60
 _ACTIVE = ("queued", "indexing", "deleting")
 _SELECTED = "selected_repo"
 
@@ -25,11 +26,16 @@ def _index(client: ApiClient, url: str, branch: str | None = None) -> None:
     job = client.add_repo(url, branch)
     with st.status(f"Indexing {job['repo']}", expanded=True) as status:
         bar = st.progress(0.0, text=components.STAGE_LABELS["queued"])
+        deadline = time.monotonic() + _MAX_WAIT_S
         while True:
             info = client.repo(job["id"])
             bar.progress(components.progress_fraction(info), text=components.progress_text(info))
             if info["status"] not in _ACTIVE:
                 break
+            if time.monotonic() > deadline:
+                status.update(label=f"Still indexing {info['repo']}", state="error")
+                st.warning("This is taking unusually long. Check the API logs, then reload.")
+                return
             time.sleep(_POLL_INTERVAL_S)
         if info["status"] == "failed":
             status.update(label=f"Indexing {info['repo']} failed", state="error")
@@ -53,6 +59,8 @@ def _sidebar(client: ApiClient) -> list[dict[str, Any]]:
             submitted = st.form_submit_button("Index", type="primary", width="stretch")
         if submitted and url.strip():
             _index(client, url.strip(), branch.strip() or None)
+        elif submitted:
+            st.warning("Enter a GitHub URL such as `pallets/flask`.")
 
         repos = client.repos()
         st.subheader("Indexed repositories")

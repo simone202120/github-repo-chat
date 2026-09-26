@@ -149,3 +149,10 @@ def test_unreachable_backend_shows_friendly_error() -> None:
     FakeApi.error = client_module.ApiError("API unreachable: refused")
     app = _run()
     assert "docker compose up" in app.error[0].value
+
+
+def test_blank_url_submit_warns() -> None:
+    app = _run()
+    app.sidebar.button[0].click().run()
+    assert "Enter a GitHub URL" in app.sidebar.warning[0].value
+    assert FakeApi.calls == []
