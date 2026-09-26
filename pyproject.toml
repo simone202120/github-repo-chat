@@ -1,0 +1,66 @@
+[project]
+name = "github-repo-chat"
+version = "0.1.0"
+description = "Chat with any public GitHub repository: README, docs and source code indexed with LlamaIndex into Qdrant, answered with citations that link back to the files."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+]
+
+[dependency-groups]
+dev = [
+    "deptry>=0.23",
+    "mypy>=1.15",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.11",
+    "vulture>=2.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/github_repo_chat"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "N", "PT"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not integration and not llm'"
+markers = [
+    "integration: needs real infrastructure (docker compose services)",
+    "llm: calls a real LLM through OpenRouter (manual only)",
+]
+
+[tool.coverage.run]
+source = ["src/github_repo_chat"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_empty = true
+
+[tool.vulture]
+paths = ["src"]
+min_confidence = 80
+
+[tool.deptry]
+known_first_party = ["github_repo_chat"]
