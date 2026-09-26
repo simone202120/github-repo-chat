@@ -111,3 +111,20 @@ def test_split_embeds_path_and_symbol_but_not_url(splitter: Splitter) -> None:
     assert "a.py" in embedded
     assert "run" in embedded
     assert "https://" not in embedded
+
+
+def test_split_detects_kotlin_fun_symbol(splitter: Splitter) -> None:
+    """Kotlin declares functions with `fun`, not `func`/`fn`; the outline must recognise it."""
+    code = "package demo\n\nfun twice(x: Int): Int {\n    return x * 2\n}\n"
+    nodes = splitter.split(REPO, SourceFile("Main.kt", code, "kotlin"))
+    assert nodes[0].metadata["symbol"] == "twice"
+
+
+def test_split_start_line_is_correct_for_chunks_with_a_duplicate_first_line(
+    splitter: Splitter,
+) -> None:
+    block = "def handler(event):\n" + "".join(f"    step_{i}(event)\n" for i in range(12))
+    text = f"{block}\n{block}"
+    nodes = splitter.split(REPO, SourceFile("dup.py", text, "python"))
+    starts = [n.metadata["start_line"] for n in nodes if n.text.lstrip().startswith("def handler")]
+    assert starts == [1, 15]

@@ -30,7 +30,7 @@ _DEFINITIONS = [
     re.compile(
         r"^\s*(?:(?:export|default|pub(?:\([\w:]+\))?|async|public|private|protected|internal"
         r"|static|final|abstract|open|override|data|sealed|unsafe)\s+)*"
-        r"(?:def|class|function\*?|func|fn|interface|struct|enum|trait|impl|type|module|object"
+        r"(?:def|class|function\*?|func|fun|fn|interface|struct|enum|trait|impl|type|module|object"
         r"|record)\s+(?:\([^)]*\)\s*)?([A-Za-z_$][\w$]*)"
     ),
     # JavaScript/TypeScript arrow functions assigned to a constant.
@@ -92,13 +92,17 @@ def _symbol_for(outline: list[tuple[int, str]], start: int, end: int) -> str:
     return before
 
 
-def _locate(text: str, chunk: str, cursor: int) -> int:
-    """Offset of the chunk in the file; splitters may trim whitespace, so match its first line."""
+def _locate(text: str, chunk: str, search_from: int) -> int:
+    """Offset of the chunk in the file; splitters may trim whitespace, so match its first line.
+
+    Chunks come in file order, so searching after the previous chunk's start keeps repeated
+    lines (overlaps, duplicated blocks) from all resolving to their first occurrence.
+    """
     first_line = chunk.strip().splitlines()[0]
-    offset = text.find(first_line, cursor)
+    offset = text.find(first_line, search_from)
     if offset < 0:
         offset = text.find(first_line)
-    return offset if offset >= 0 else cursor
+    return max(offset, 0)
 
 
 class Splitter:
@@ -119,12 +123,13 @@ class Splitter:
     def split(self, repo: RepoRef, file: SourceFile) -> list[TextNode]:
         outline = _outline(file)
         nodes = []
-        cursor = 0
+        search_from = 0
         for chunk in self._split_text(file):
             if not chunk.strip():
                 continue
-            cursor = _locate(file.text, chunk, cursor)
-            start = file.text.count("\n", 0, cursor) + 1
+            offset = _locate(file.text, chunk, search_from)
+            search_from = offset + 1
+            start = file.text.count("\n", 0, offset) + 1
             end = start + chunk.strip("\n").count("\n")
             node = TextNode(
                 text=chunk,
