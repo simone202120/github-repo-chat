@@ -63,3 +63,22 @@ Each decision lists the choice and the trade-off behind it.
   OpenRouter model ids).
 - **Qdrant client and server pinned together** (client 1.19, server `v1.19.1`): the client warns
   when minor versions differ by more than one.
+
+### API
+
+- **Repository id = job id.** `POST /repos` returns the repository id (`<owner>--<name>`), which
+  is also the path parameter of `GET/DELETE /repos/{id}`. One id per repository keeps the API
+  small, and at most one ingestion job per repository can be active (a second one gets `409`).
+- **In-memory job registry + FastAPI background tasks.** Ingestion runs in the server threadpool,
+  and its progress (stage, done/total) and errors live in a thread-safe dict. Trade-off: job
+  status is lost on restart and jobs do not scale across workers, which is fine for a
+  single-user demo (no multi-user in scope). Indexed repositories survive restarts through the
+  Qdrant manifests, so `GET /repos` merges manifests with live jobs.
+- **Stateless chat.** The client sends the recent history with each `POST /chat`; the server
+  keeps only the last `HISTORY_TURNS` messages. No session store is needed.
+- **Limits at the edge.** Pydantic schemas cap URL (300 chars), question (2000), history
+  (20 messages of up to 8000 chars), and allow only `user`/`assistant` roles. Domain errors map to
+  HTTP codes in one place (`api/main.py`).
+- **Dependency container.** `Services` bundles settings, store, chat engine, tracer, jobs and the
+  archive fetcher. `create_app(services)` lets tests inject in-memory Qdrant, a mock embedding, a
+  scripted LLM and a fixture zip, with no network or keys.

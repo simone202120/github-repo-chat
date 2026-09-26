@@ -63,3 +63,8 @@ def parse_repo_id(repo_id: str) -> RepoRef:
     if not sep:
         raise InvalidRepoError(f"Invalid repository id: {repo_id!r}")
     return parse_repo(f"{owner}/{name}")
+
+
+def parse_repo_or_id(value: str) -> RepoRef:
+    """Accepts either `owner/name` (or a URL) or a repository id."""
+    return parse_repo(value) if "/" in value else parse_repo_id(value)
