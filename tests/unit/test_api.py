@@ -158,6 +158,9 @@ def test_chat_answers_with_sources(client: TestClient, llm: ScriptedLLM) -> None
     body = response.json()
     assert body["answer"] == "Install it with pip [1]."
     assert body["standalone_question"] == "How do I install tinycalc?"
+    assert body["usage"] == {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": None}
+    assert body["latency_ms"] >= 0
+    assert body["trace_url"] is None
     assert 1 <= len(body["sources"]) <= 3
     source = body["sources"][0]
     assert source["number"] == 1

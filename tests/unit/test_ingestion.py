@@ -58,6 +58,7 @@ def test_ingest_repo_first_run_indexes_everything(splitter: Splitter) -> None:
         "src/demo/core.py",
         "src/demo/util.py",
     }
+    assert events[0] == ("filtering", 0, 0)
     assert events[-1][0] == "embedding"
     assert events[-1][1] == events[-1][2] == len(index.nodes)
 

@@ -47,10 +47,19 @@ class SourceOut(BaseModel):
     score: float | None
 
 
+class UsageOut(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float | None
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceOut]
     standalone_question: str
+    usage: UsageOut
+    latency_ms: int
+    trace_url: str | None
 
 
 class HealthResponse(BaseModel):

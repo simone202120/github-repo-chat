@@ -1,6 +1,8 @@
+from types import SimpleNamespace
+
 import pytest
 
-from github_repo_chat.core.chat import ChatEngine, ChatTurn
+from github_repo_chat.core.chat import ChatEngine, ChatTurn, Usage, _usage_of
 from github_repo_chat.core.repo_ref import RepoRef
 from github_repo_chat.llm.prompts import NO_ANSWER
 from tests.fakes import ScriptedLLM, StaticRetriever, chunk
@@ -94,3 +96,32 @@ def test_answer_reranker_reorders_and_truncates() -> None:
 def test_candidates_grow_when_reranking() -> None:
     assert _engine(ScriptedLLM()).candidates == 2
     assert _engine(ScriptedLLM(), reranker=lambda q, p: [0.0] * len(p)).candidates == 6
+
+
+def test_answer_sums_usage_of_condense_and_answer_calls() -> None:
+    usage = {"prompt_tokens": 100, "completion_tokens": 10, "cost": 0.001}
+    llm = ScriptedLLM(responses=["standalone?", "a [1]"], usage=usage)
+    answer = _engine(llm).answer(
+        REPO, StaticRetriever([chunk("a.py", "x")]), "q", [ChatTurn("user", "hi")]
+    )
+    assert answer.usage.prompt_tokens == 200
+    assert answer.usage.completion_tokens == 20
+    assert answer.usage.cost_usd == pytest.approx(0.002)
+
+
+def test_answer_usage_without_reported_cost() -> None:
+    llm = ScriptedLLM(responses=["a"], usage={"prompt_tokens": 5, "completion_tokens": 1})
+    answer = _engine(llm).answer(REPO, StaticRetriever([chunk("a.py", "x")]), "q")
+    assert (answer.usage.prompt_tokens, answer.usage.completion_tokens) == (5, 1)
+    assert answer.usage.cost_usd is None
+
+
+def test_answer_without_llm_call_has_zero_usage() -> None:
+    answer = _engine(ScriptedLLM()).answer(REPO, StaticRetriever([]), "q")
+    assert answer.usage == Usage()
+
+
+def test_usage_of_reads_object_style_raw_response() -> None:
+    raw = SimpleNamespace(usage=SimpleNamespace(cost=0.5))
+    assert _usage_of({"prompt_tokens": 3, "completion_tokens": 2}, raw) == Usage(3, 2, 0.5)
+    assert _usage_of({}, None) == Usage()

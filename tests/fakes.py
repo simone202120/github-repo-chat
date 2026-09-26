@@ -8,10 +8,13 @@ from typing import Any
 
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.llms import (
+    ChatMessage,
+    ChatResponse,
     CompletionResponse,
     CompletionResponseGen,
     CustomLLM,
     LLMMetadata,
+    MessageRole,
 )
 from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNode
 from pydantic import Field
@@ -56,6 +59,7 @@ class ScriptedLLM(CustomLLM):
 
     responses: list[str] = Field(default_factory=list)
     prompts: list[str] = Field(default_factory=list)
+    usage: dict[str, Any] | None = None
 
     @property
     def metadata(self) -> LLMMetadata:
@@ -63,7 +67,19 @@ class ScriptedLLM(CustomLLM):
 
     def complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> CompletionResponse:
         self.prompts.append(prompt)
-        return CompletionResponse(text=self.responses.pop(0) if self.responses else "")
+        text = self.responses.pop(0) if self.responses else ""
+        if self.usage is None:
+            return CompletionResponse(text=text)
+        counts = {k: v for k, v in self.usage.items() if k.endswith("_tokens")}
+        return CompletionResponse(text=text, raw={"usage": self.usage}, additional_kwargs=counts)
+
+    def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        completion = self.complete(self.messages_to_prompt(messages))
+        return ChatResponse(
+            message=ChatMessage(role=MessageRole.ASSISTANT, content=completion.text),
+            raw=completion.raw,
+            additional_kwargs=completion.additional_kwargs,
+        )
 
     def stream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
