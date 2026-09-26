@@ -151,7 +151,7 @@ def test_delete_unknown_repo_returns_404(client: TestClient) -> None:
 
 def test_chat_answers_with_sources(client: TestClient, llm: ScriptedLLM) -> None:
     _index(client)
-    llm.responses.append("Install it with pip [1].")
+    llm.responses.extend(["How do I install tinycalc?", "Install it with pip [1]."])
     response = client.post(
         "/chat", json={"repo": "octo/tinycalc", "question": "How do I install tinycalc?"}
     )

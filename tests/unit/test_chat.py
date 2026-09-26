@@ -14,21 +14,22 @@ def _engine(llm: ScriptedLLM, **kwargs) -> ChatEngine:
     return ChatEngine(llm, top_k=kwargs.pop("top_k", 2), history_turns=4, **kwargs)
 
 
-def test_answer_without_history_skips_condensing_and_cites_sources() -> None:
-    llm = ScriptedLLM(responses=["It adds numbers [1]."])
+def test_answer_without_history_still_rewrites_the_query_and_cites_sources() -> None:
+    llm = ScriptedLLM(responses=["What does add do?", "It adds numbers [1]."])
     retriever = StaticRetriever([chunk("core.py", "def add(a, b): ...", "add", 3)])
 
-    answer = _engine(llm).answer(REPO, retriever, "What does add do?")
+    answer = _engine(llm).answer(REPO, retriever, "Cosa fa add?")
 
     assert answer.text == "It adds numbers [1]."
     assert [s.path for s in answer.sources] == ["core.py"]
     assert answer.standalone_question == "What does add do?"
     assert retriever.queries == ["What does add do?"]
-    assert len(llm.prompts) == 1
-    prompt = llm.prompts[0]
+    assert "(none)" in llm.prompts[0]
+    assert "Latest question: Cosa fa add?" in llm.prompts[0]
+    prompt = llm.prompts[1]
     assert "octo/demo" in prompt
     assert '<excerpt number="1" path="core.py" symbol="add" line="3">' in prompt
-    assert "Question: What does add do?" in prompt
+    assert "Question: Cosa fa add?" in prompt
 
 
 def test_answer_with_history_condenses_before_retrieval() -> None:
@@ -59,16 +60,16 @@ def test_answer_empty_condense_falls_back_to_question() -> None:
     assert retriever.queries == ["original?"]
 
 
-def test_answer_without_context_does_not_call_llm() -> None:
-    llm = ScriptedLLM()
+def test_answer_without_context_skips_the_answer_call() -> None:
+    llm = ScriptedLLM(responses=["Anything?"])
     answer = _engine(llm).answer(REPO, StaticRetriever([]), "Anything?")
     assert answer.text == NO_ANSWER
     assert answer.sources == []
-    assert llm.prompts == []
+    assert len(llm.prompts) == 1
 
 
 def test_answer_empty_llm_reply_becomes_no_answer() -> None:
-    answer = _engine(ScriptedLLM(responses=[""])).answer(
+    answer = _engine(ScriptedLLM(responses=["q", ""])).answer(
         REPO, StaticRetriever([chunk("a.py", "x")]), "q"
     )
     assert answer.text == NO_ANSWER
@@ -76,7 +77,7 @@ def test_answer_empty_llm_reply_becomes_no_answer() -> None:
 
 def test_answer_truncates_to_top_k_without_reranker() -> None:
     nodes = [chunk(f"f{i}.py", "x") for i in range(5)]
-    answer = _engine(ScriptedLLM(responses=["a"])).answer(REPO, StaticRetriever(nodes), "q")
+    answer = _engine(ScriptedLLM(responses=["q", "a"])).answer(REPO, StaticRetriever(nodes), "q")
     assert [s.path for s in answer.sources] == ["f0.py", "f1.py"]
 
 
@@ -87,7 +88,7 @@ def test_answer_reranker_reorders_and_truncates() -> None:
     def reranker(query: str, passages: list[str]) -> list[float]:
         return [scores[p.splitlines()[-1]] for p in passages]
 
-    engine = _engine(ScriptedLLM(responses=["a"]), reranker=reranker)
+    engine = _engine(ScriptedLLM(responses=["q", "a"]), reranker=reranker)
     answer = engine.answer(REPO, StaticRetriever(nodes), "q")
     assert [s.path for s in answer.sources] == ["high.py", "mid.py"]
     assert answer.sources[0].score == pytest.approx(0.9)
@@ -110,13 +111,13 @@ def test_answer_sums_usage_of_condense_and_answer_calls() -> None:
 
 
 def test_answer_usage_without_reported_cost() -> None:
-    llm = ScriptedLLM(responses=["a"], usage={"prompt_tokens": 5, "completion_tokens": 1})
+    llm = ScriptedLLM(responses=["q", "a"], usage={"prompt_tokens": 5, "completion_tokens": 1})
     answer = _engine(llm).answer(REPO, StaticRetriever([chunk("a.py", "x")]), "q")
-    assert (answer.usage.prompt_tokens, answer.usage.completion_tokens) == (5, 1)
+    assert (answer.usage.prompt_tokens, answer.usage.completion_tokens) == (10, 2)
     assert answer.usage.cost_usd is None
 
 
-def test_answer_without_llm_call_has_zero_usage() -> None:
+def test_answer_without_reported_usage_is_zero() -> None:
     answer = _engine(ScriptedLLM()).answer(REPO, StaticRetriever([]), "q")
     assert answer.usage == Usage()
 

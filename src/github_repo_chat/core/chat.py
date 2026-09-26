@@ -108,9 +108,9 @@ class ChatEngine:
         return Answer(text, build_sources(nodes), standalone, usage)
 
     def _condense(self, repo: RepoRef, question: str, history: list[ChatTurn]) -> tuple[str, Usage]:
-        if not history:
-            return question, Usage()
-        transcript = "\n".join(f"{turn.role}: {turn.content}" for turn in history)
+        # Always rewritten, even without history: the embedding model is English-only, so a
+        # question in another language must be translated before retrieval.
+        transcript = "\n".join(f"{turn.role}: {turn.content}" for turn in history) or "(none)"
         prompt = CONDENSE_TEMPLATE.format(repo=repo.slug, history=transcript, question=question)
         response = self._llm.complete(prompt)
         usage = _usage_of(response.additional_kwargs, response.raw)
