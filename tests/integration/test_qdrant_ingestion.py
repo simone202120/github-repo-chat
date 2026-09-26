@@ -89,7 +89,11 @@ def test_hybrid_retrieval_finds_config_by_keyword(store: QdrantStore, repo: Repo
 
 
 def test_chat_engine_cites_retrieved_files(store: QdrantStore, repo: RepoRef) -> None:
-    engine = ChatEngine(ScriptedLLM(responses=["Use pip [1]."]), top_k=3, history_turns=4)
+    engine = ChatEngine(
+        ScriptedLLM(responses=["How do I install tinycalc?", "Use pip [1]."]),
+        top_k=3,
+        history_turns=4,
+    )
     answer = engine.answer(repo, store.retriever(repo, 3), "How do I install it?")
     assert answer.text == "Use pip [1]."
     assert answer.sources

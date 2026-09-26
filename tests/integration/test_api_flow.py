@@ -27,7 +27,9 @@ def test_index_chat_and_delete_through_the_api() -> None:
         build_sparse_encoders(settings),
     )
     store.ensure_registry()
-    llm = ScriptedLLM(responses=["It raises DivisionByZeroError [1]."])
+    llm = ScriptedLLM(
+        responses=["What happens when divide gets zero?", "It raises DivisionByZeroError [1]."]
+    )
     services = Services(
         settings,
         store,
