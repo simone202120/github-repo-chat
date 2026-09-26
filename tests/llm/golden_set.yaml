@@ -1,0 +1,27 @@
+# Golden set on the committed fixture repository (tests/fixtures/tinycalc-main.zip).
+# expected_files: at least one must be among the retrieved sources (hit rate@k).
+# key_facts: case-insensitive substrings the answer must contain.
+- question: What is tinycalc?
+  expected_files: [README.md]
+  key_facts: [calculator]
+- question: How do I install tinycalc?
+  expected_files: [README.md]
+  key_facts: [pip install tinycalc]
+- question: How do I add two numbers from the command line?
+  expected_files: [README.md, src/tinycalc/cli.py]
+  key_facts: [tinycalc add]
+- question: What happens when dividing by zero?
+  expected_files: [src/tinycalc/calculator.py, README.md]
+  key_facts: [DivisionByZeroError]
+- question: Where is the divide method implemented?
+  expected_files: [src/tinycalc/calculator.py]
+  key_facts: [calculator.py]
+- question: Which environment variable controls the printed precision?
+  expected_files: [docs/configuration.md, src/tinycalc/cli.py]
+  key_facts: [TINYCALC_PRECISION]
+- question: What is the default precision?
+  expected_files: [docs/configuration.md, src/tinycalc/calculator.py]
+  key_facts: ["4"]
+- question: Does tinycalc support matrix multiplication?
+  expected_files: []
+  key_facts: ["don't know"]
