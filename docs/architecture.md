@@ -42,3 +42,24 @@ Each decision lists the choice and the trade-off behind it.
 - **Prompt-injection hygiene.** Excerpts are wrapped in `<context>` / `<excerpt>` tags, the system
   prompt declares them untrusted, and closing tags inside repository content are neutralized.
 - **Optional reranking** takes a larger candidate pool (3 x top-k) and keeps the best top-k.
+
+### Storage and infrastructure
+
+- **Manifest registry in Qdrant.** Per-repository manifests (file hashes, chunk count, branch,
+  indexed time) are payload-only points in a `github_repo_chat_registry` collection, so Qdrant
+  is the only stateful service. Trade-off: no relational queries, and the whole hash map is
+  rewritten on each save (fine for ≤500 files).
+- **One hybrid collection per repository** (`repo__<owner>--<name>`): dense FastEmbed vectors plus
+  BM25 sparse vectors with Qdrant's IDF modifier, fused with relative-score fusion. Deleting a
+  repository drops its collection, and a file's chunks are removed with a single `doc_id` filter.
+  The sparse side retrieves 2 x top-k before fusion.
+- **BM25 encoders built once** and passed to `QdrantVectorStore`: documents use `embed`, queries
+  use `query_embed` (the library default uses `embed` for both and reloads the model on each
+  store). Trade-off: a little glue code in `llm/factory.py`.
+- **Tracing through OpenInference.** Langfuse v4 is OpenTelemetry-based: the LlamaIndex
+  instrumentor emits retrieval / embedding / LLM spans with token usage, and the API opens one
+  root span per chat request so they group into one trace. Without keys, `Tracer` is a no-op.
+  Cost appears when Langfuse knows the model's price (custom prices can be added in Langfuse for
+  OpenRouter model ids).
+- **Qdrant client and server pinned together** (client 1.19, server `v1.19.1`): the client warns
+  when minor versions differ by more than one.
