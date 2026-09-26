@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,17 +23,17 @@ class Settings(BaseSettings):
     sparse_model: str = "Qdrant/bm25"
     rerank_model: str = ""
 
-    max_files: int = 500
-    max_file_bytes: int = 200_000
-    max_archive_bytes: int = 100_000_000
-    download_timeout_s: float = 60.0
+    max_files: int = Field(default=500, gt=0)
+    max_file_bytes: int = Field(default=200_000, gt=0)
+    max_archive_bytes: int = Field(default=100_000_000, gt=0)
+    download_timeout_s: float = Field(default=60.0, gt=0)
 
-    code_chunk_lines: int = 60
-    code_chunk_max_chars: int = 2000
-    text_chunk_tokens: int = 512
+    code_chunk_lines: int = Field(default=60, gt=0)
+    code_chunk_max_chars: int = Field(default=2000, gt=0)
+    text_chunk_tokens: int = Field(default=512, gt=0)
 
-    top_k: int = 6
-    history_turns: int = 6
+    top_k: int = Field(default=6, gt=0)
+    history_turns: int = Field(default=6, ge=0)
 
     api_url: str = "http://localhost:8000"
 

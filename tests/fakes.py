@@ -2,6 +2,7 @@
 
 import io
 import zipfile
+import zlib
 from collections.abc import Sequence
 from typing import Any
 
@@ -96,3 +97,13 @@ def chunk(
         },
     )
     return NodeWithScore(node=node, score=score)
+
+
+def hashed_bag_of_words(texts: list[str]) -> tuple[list[list[int]], list[list[float]]]:
+    """Deterministic stand-in for the BM25 encoder: one sparse dimension per distinct word."""
+    indices, values = [], []
+    for text in texts:
+        words = sorted({zlib.crc32(w.lower().encode()) % 100_000 for w in text.split()})
+        indices.append(words)
+        values.append([1.0] * len(words))
+    return indices, values
